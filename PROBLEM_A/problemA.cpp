@@ -1,163 +1,228 @@
-#include <iostream>
-#include <vector>
-#include <string>
-#include <climits>
+#include <bits/stdc++.h>
 using namespace std;
 
-const int INF = 1e9;
-int R, C, minTurrets;
-vector<string> grid;
-
-// Directions: left, up, right, down
-int dr[] = {0, -1, 0, 1};
-int dc[] = {-1, 0, 1, 0};
-
-// Check if (r,c) is inside the grid.
-bool isValid(int r, int c) {
-    return r >= 0 && r < R && c >= 0 && c < C;
-}
-
-// Before placing a turret at (r,c), check that in every direction no turret is visible.
-// We scan both forward and backward in each direction (since beams are symmetric)
-// and stop the scan when a wall ('#') or an outpost (digit) is encountered.
-bool turretConflict(int r, int c, const vector<vector<int>>& placed) {
-    // Check forward directions
-    for (int d = 0; d < 4; d++) {
-        int nr = r, nc = c;
-        while (true) {
-            nr += dr[d]; nc += dc[d];
-            if (!isValid(nr, nc)) break;
-            char cell = grid[nr][nc];
-            if (cell == '#' || (cell >= '0' && cell <= '4'))
-                break;
-            if (placed[nr][nc] == 1)
-                return true;
-        }
-    }
-    // Check reverse directions (to catch turrets behind the current cell)
-    for (int d = 0; d < 4; d++) {
-        int nr = r, nc = c;
-        while (true) {
-            nr -= dr[d]; nc -= dc[d];
-            if (!isValid(nr, nc)) break;
-            char cell = grid[nr][nc];
-            if (cell == '#' || (cell >= '0' && cell <= '4'))
-                break;
-            if (placed[nr][nc] == 1)
-                return true;
-        }
-    }
-    return false;
-}
-
-// When a turret is placed at (r,c), update the coverage.
-// A turret covers its own cell and extends its beam in each direction
-// until a wall or an outpost blocks it.
-void updateCoverage(int r, int c, vector<vector<bool>>& cover) {
-    cover[r][c] = true;
-    for (int d = 0; d < 4; d++) {
-        int nr = r, nc = c;
-        while (true) {
-            nr += dr[d]; nc += dc[d];
-            if (!isValid(nr, nc)) break;
-            char cell = grid[nr][nc];
-            if (cell == '#' || (cell >= '0' && cell <= '4'))
-                break;
-            cover[nr][nc] = true;
-        }
+#ifdef LOCAL
+// Redirect standard input from "inputmd.txt" when testing locally.
+void redirectStdin() {
+    if (!freopen("inputmd.txt", "r", stdin)) {
+        cerr << "Error: cannot open input file 'inputmd.txt'\n";
+        exit(1);
     }
 }
+#endif
 
-// Check that every empty cell ('.') is covered by at least one turret beam.
-bool allCovered(const vector<vector<bool>>& cover) {
-    for (int i = 0; i < R; i++){
-        for (int j = 0; j < C; j++){
-            if (grid[i][j] == '.' && !cover[i][j])
-                return false;
-        }
-    }
-    return true;
-}
+// Maximum candidate cells for a 15x15 grid (225 cells) – 256 is a safe upper bound.
+const int MAX_CAND = 256;
 
-// For each outpost (cells with digit '0'-'4'), count adjacent (orthogonal) turrets
-// and check that it exactly matches the required number.
-bool validOutposts(const vector<vector<int>>& placed) {
-    for (int i = 0; i < R; i++){
-        for (int j = 0; j < C; j++){
-            char cell = grid[i][j];
-            if (cell >= '0' && cell <= '4'){
-                int required = cell - '0';
-                int count = 0;
-                for (int d = 0; d < 4; d++){
-                    int nr = i + dr[d], nc = j + dc[d];
-                    if (isValid(nr, nc) && placed[nr][nc] == 1)
-                        count++;
-                }
-                if (count != required)
-                    return false;
-            }
-        }
-    }
-    return true;
-}
+struct Outpost {
+    int r, c, req;
+    vector<int> adj; // candidate indices adjacent to this outpost
+};
 
-// Backtracking over all grid cells. idx runs from 0 to R*C.
-// turretCount holds the number of turrets placed so far.
-// 'placed' is a matrix indicating turret placements (1 if turret is placed).
-// 'cover' is a matrix tracking which cells are covered by at least one turret beam.
-void backtrack(int idx, int turretCount, vector<vector<int>>& placed, vector<vector<bool>>& cover) {
-    if (turretCount >= minTurrets)
-        return; // prune if already not optimal
-    if (idx == R * C) { // reached the end of the grid
-        if (allCovered(cover) && validOutposts(placed))
-            minTurrets = turretCount;
-        return;
-    }
-    int r = idx / C, c = idx % C;
-    // If the cell is not empty (i.e. it's a wall or an outpost), skip it.
-    if (grid[r][c] != '.') {
-        backtrack(idx + 1, turretCount, placed, cover);
-        return;
-    }
-    // Option 1: Do not place a turret at (r, c)
-    backtrack(idx + 1, turretCount, placed, cover);
-    
-    // Option 2: Try placing a turret here.
-    // Check if placing a turret here would conflict with any turret already placed.
-    if (!turretConflict(r, c, placed)) {
-        // Create copies of the current state.
-        vector<vector<int>> newPlaced = placed;
-        vector<vector<bool>> newCover = cover;
-        newPlaced[r][c] = 1;
-        updateCoverage(r, c, newCover);
-        backtrack(idx + 1, turretCount + 1, newPlaced, newCover);
-    }
-}
+struct Candidate {
+    int r, c;
+};
 
 int main(){
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
-    
+
+    #ifdef LOCAL
+        redirectStdin();
+    #endif
+
     int T;
     cin >> T;
-    while (T--){
+    while(T--){
+        int R, C;
         cin >> R >> C;
-        grid.resize(R);
+        vector<string> grid(R);
         for (int i = 0; i < R; i++){
             cin >> grid[i];
         }
         
-        minTurrets = INF;
-        // Initialize matrices for turret placements and coverage.
-        vector<vector<int>> placed(R, vector<int>(C, 0));
-        vector<vector<bool>> cover(R, vector<bool>(C, false));
+        // Build candidate list: all empty cells ('.') are potential turret placements.
+        vector<Candidate> candidates;
+        vector<vector<int>> candIndex(R, vector<int>(C, -1));
+        for (int i = 0; i < R; i++){
+            for (int j = 0; j < C; j++){
+                if(grid[i][j] == '.'){
+                    int idx = candidates.size();
+                    candidates.push_back({i, j});
+                    candIndex[i][j] = idx;
+                }
+            }
+        }
+        int E = candidates.size();
         
-        backtrack(0, 0, placed, cover);
+        // If grid contains no obstacles (walls/outposts), answer is simply max(R, C).
+        bool hasObstacle = false;
+        for (int i = 0; i < R && !hasObstacle; i++){
+            for (int j = 0; j < C; j++){
+                if(grid[i][j] != '.'){
+                    hasObstacle = true;
+                    break;
+                }
+            }
+        }
+        if(!hasObstacle){
+            cout << max(R, C) << "\n";
+            continue;
+        }
         
-        if (minTurrets == INF)
-            cout << "noxus will rise!\n";
-        else
-            cout << minTurrets << "\n";
+        // Precompute each candidate’s coverage bitset:
+        // A turret covers its own cell plus all cells in the four directions until an obstacle is hit.
+        vector<bitset<MAX_CAND>> candCoverage(E), candConflict(E);
+        for (int i = 0; i < E; i++){
+            candCoverage[i].reset();
+            candCoverage[i].set(i);
+        }
+        int dr[4] = {0, 0, 1, -1};
+        int dc[4] = {1, -1, 0, 0};
+        for (int i = 0; i < E; i++){
+            int r = candidates[i].r, c = candidates[i].c;
+            for (int d = 0; d < 4; d++){
+                int nr = r + dr[d], nc = c + dc[d];
+                while(nr >= 0 && nr < R && nc >= 0 && nc < C && grid[nr][nc] == '.'){
+                    int idx = candIndex[nr][nc];
+                    candCoverage[i].set(idx);
+                    nr += dr[d];
+                    nc += dc[d];
+                }
+            }
+        }
+        // Conflict bitset: a turret cannot be placed where another turret’s line‐of‐sight (coverage) exists.
+        for (int i = 0; i < E; i++){
+            candConflict[i] = candCoverage[i];
+            candConflict[i].reset(i);
+        }
+        
+        // fullCoverage: all empty candidate cells must be covered.
+        bitset<MAX_CAND> fullCoverage;
+        fullCoverage.reset();
+        for (int i = 0; i < E; i++){
+            fullCoverage.set(i);
+        }
+        
+        // Process outposts: these are cells containing a digit ('0' to '4') indicating how many adjacent turrets are required.
+        vector<Outpost> outposts;
+        for (int i = 0; i < R; i++){
+            for (int j = 0; j < C; j++){
+                if(isdigit(grid[i][j])){
+                    Outpost op;
+                    op.r = i; op.c = j;
+                    op.req = grid[i][j] - '0';
+                    int dr2[4] = {0, 0, 1, -1};
+                    int dc2[4] = {1, -1, 0, 0};
+                    for (int d = 0; d < 4; d++){
+                        int ni = i + dr2[d], nj = j + dc2[d];
+                        if(ni >= 0 && ni < R && nj >= 0 && nj < C && grid[ni][nj] == '.'){
+                            int idx = candIndex[ni][nj];
+                            op.adj.push_back(idx);
+                        }
+                    }
+                    outposts.push_back(op);
+                }
+            }
+        }
+        
+        // For each candidate, note which outposts it is adjacent to.
+        vector<vector<int>> candToOutposts(E);
+        for (int opIdx = 0; opIdx < (int)outposts.size(); opIdx++){
+            for (int cand : outposts[opIdx].adj){
+                candToOutposts[cand].push_back(opIdx);
+            }
+        }
+        
+        // Order candidate indices by a heuristic: those covering more cells come first.
+        vector<int> candOrder(E);
+        for (int i = 0; i < E; i++){
+            candOrder[i] = i;
+        }
+        sort(candOrder.begin(), candOrder.end(), [&](int a, int b) {
+            return candCoverage[a].count() > candCoverage[b].count();
+        });
+        int nOrder = candOrder.size();
+        
+        // Use iterative deepening DFS to select a subset of turret placements that:
+        // 1) Cover all empty cells,
+        // 2) Satisfy each outpost’s required adjacent turret count exactly,
+        // 3) Do not have conflicting placements.
+        bool solutionFound = false;
+        int best = INT_MAX;
+        vector<int> initOutCount(outposts.size(), 0);
+        
+        function<void(int, int, bitset<MAX_CAND>, bitset<MAX_CAND>, vector<int>&)> dfs = 
+        [&](int pos, int count, bitset<MAX_CAND> currCoverage, bitset<MAX_CAND> forbidden, vector<int>& outCount) {
+            if(solutionFound) return;
+            if(count == best){
+                if(currCoverage == fullCoverage){
+                    bool valid = true;
+                    for (int i = 0; i < (int)outposts.size(); i++){
+                        if(outCount[i] != outposts[i].req) { valid = false; break; }
+                    }
+                    if(valid) {
+                        solutionFound = true;
+                    }
+                }
+                return;
+            }
+            if(count + (nOrder - pos) < best) return;
+            bitset<MAX_CAND> potential = currCoverage;
+            for (int i = pos; i < nOrder; i++){
+                int candIdx = candOrder[i];
+                if(!forbidden.test(candIdx))
+                    potential |= candCoverage[candIdx];
+            }
+            if(potential != fullCoverage) return;
+            
+            for (int i = pos; i < nOrder; i++){
+                int candIdx = candOrder[i];
+                if(forbidden.test(candIdx)) continue;
+                
+                bitset<MAX_CAND> newCoverage = currCoverage | candCoverage[candIdx];
+                bitset<MAX_CAND> newForbidden = forbidden;
+                newForbidden.set(candIdx);
+                newForbidden |= candConflict[candIdx];
+                
+                vector<int> newOutCount = outCount;
+                for (int opIdx : candToOutposts[candIdx]){
+                    newOutCount[opIdx]++;
+                    if(newOutCount[opIdx] > outposts[opIdx].req)
+                        goto skip_candidate;
+                }
+                for (int opIdx = 0; opIdx < (int)outposts.size(); opIdx++){
+                    int needed = outposts[opIdx].req - newOutCount[opIdx];
+                    int possible = 0;
+                    for (int cand : outposts[opIdx].adj) {
+                        if(!newForbidden.test(cand)) possible++;
+                    }
+                    if(possible < needed)
+                        goto skip_candidate;
+                }
+                
+                dfs(i+1, count+1, newCoverage, newForbidden, newOutCount);
+                if(solutionFound) return;
+            skip_candidate:
+                ;
+            }
+        };
+        
+        for (int k = 1; k <= E; k++){
+            best = k;
+            solutionFound = false;
+            bitset<MAX_CAND> initCoverage;
+            initCoverage.reset();
+            bitset<MAX_CAND> initForbidden;
+            initForbidden.reset();
+            dfs(0, 0, initCoverage, initForbidden, initOutCount);
+            if(solutionFound){
+                cout << k << "\n";
+                break;
+            }
+        }
+        if(!solutionFound)
+            cout << "noxus will rise!" << "\n";
     }
     return 0;
 }
