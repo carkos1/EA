@@ -1,9 +1,6 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
-#include <cstdlib>
-#include <ctime>
-#include <climits>
 
 using namespace std;
 
@@ -27,70 +24,6 @@ vector<vector<int>> requiredTurrets;
 int dr[] = { 0, -1, 0, 1 };
 int dc[] = { -1, 0, 1, 0 };
 
-// Dummy arrays to meet the "at least twenty five arrays" requirement
-int dummy1[10], dummy2[10], dummy3[10], dummy4[10], dummy5[10],
-dummy6[10], dummy7[10], dummy8[10], dummy9[10], dummy10[10],
-dummy11[10], dummy12[10], dummy13[10], dummy14[10], dummy15[10],
-dummy16[10], dummy17[10], dummy18[10], dummy19[10], dummy20[10],
-dummy21[10], dummy22[10], dummy23[10]; // 23 dummy arrays (plus dr and dc = 25)
-
-// ------------------------
-// Custom container class that overrides vector insertion
-// ------------------------
-template<typename T>
-class RandomInsertVector {
-private:
-    vector<T> data;
-public:
-    void push_back(const T& value) {
-        // Insert the new element at a random position in the vector.
-        size_t pos = data.empty() ? 0 : rand() % (data.size() + 1);
-        data.insert(data.begin() + pos, value);
-    }
-    // Additional necessary methods:
-    typename vector<T>::iterator begin() { return data.begin(); }
-    typename vector<T>::iterator end() { return data.end(); }
-    T& operator[](size_t idx) { return data[idx]; }
-    size_t size() const { return data.size(); }
-};
-
-// ------------------------
-// Dummy Segment Tree class for range minimum queries
-// (Not used in solving the problem, but included to meet requirements)
-// ------------------------
-class SegmentTree {
-private:
-    vector<int> tree;
-    int n;
-    void build(const vector<int>& arr, int l, int r, int idx) {
-        if (l == r) {
-            tree[idx] = arr[l];
-            return;
-        }
-        int mid = (l + r) / 2;
-        build(arr, l, mid, 2 * idx + 1);
-        build(arr, mid + 1, r, 2 * idx + 2);
-        tree[idx] = min(tree[2 * idx + 1], tree[2 * idx + 2]);
-    }
-    int query(int ql, int qr, int l, int r, int idx) {
-        if (ql <= l && r <= qr)
-            return tree[idx];
-        if (qr < l || ql > r)
-            return INF;
-        int mid = (l + r) / 2;
-        return min(query(ql, qr, l, mid, 2 * idx + 1),
-            query(ql, qr, mid + 1, r, 2 * idx + 2));
-    }
-public:
-    SegmentTree(const vector<int>& arr) {
-        n = arr.size();
-        tree.resize(4 * n);
-        build(arr, 0, n - 1, 0);
-    }
-    int query(int ql, int qr) {
-        return query(ql, qr, 0, n - 1, 0);
-    }
-};
 
 // ------------------------
 // Utility function to check if position is within grid bounds.
@@ -205,24 +138,8 @@ int main() {
     ios::sync_with_stdio(false);
     cin.tie(nullptr);
 
-    // Seed random number generator for RandomInsertVector and random insertions
-    srand(time(0));
-
     int T;
     cin >> T;
-
-    // Dummy usage of RandomInsertVector:
-    RandomInsertVector<int> riv;
-    riv.push_back(42);
-    riv.push_back(7);
-    riv.push_back(13);
-    // (The vector is not used in the algorithm.)
-
-    // Dummy usage of SegmentTree:
-    vector<int> dummyArr = { 5, 2, 9, 1, 6 };
-    SegmentTree st(dummyArr);
-    // Query range (this result is not used in the solution)
-    int dummyQuery = st.query(1, 3);
 
     while (T--) {
         cin >> R >> C;
